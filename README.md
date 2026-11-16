@@ -91,6 +91,7 @@ If you only downloaded an AppImage manually, delete that AppImage instead.
 - Game settings offer separate **DualSense** and **DualShock 4 compatibility modes** for controller detection. They apply only to the selected game. The DualSense fallback may disable advanced haptics and adaptive triggers.
 - Game settings also choose the runtime family for that game. The choice follows the latest installed verified build of the family and keeps the same prefix and saves.
 - Choose **Add to Steam** in the game menu, or **Add Nexus Launcher to Steam** in Settings, to create a Non-Steam shortcut with available artwork. Steam can stay running, including in Game Mode. Requires native Linux Steam; Flatpak Steam is not yet supported.
+  If Steam selects Proton for the shortcut, choose **Steam Linux Runtime 3.0** in its Compatibility settings instead. The shortcut starts the Linux launcher; Nexus manages the game's Windows runtime separately.
 - Update the launcher, backend and each installed runtime family in **Settings**.
 - **Settings → Close to system tray** keeps the launcher and downloads running after closing its window. Use the tray menu to reopen Nexus Launcher or quit. Requires a desktop system tray.
 - **Settings → Interface language** selects a bundled translation independently of game language and Store region. Missing translations fall back to English.

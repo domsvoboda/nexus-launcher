@@ -1,6 +1,7 @@
 import { constants, promises as fs } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import os from 'node:os';
 import type { Game } from '../shared/types.js';
 import { steamArgument, type SteamLaunch } from './steam-shortcuts.js';
 
@@ -25,9 +26,11 @@ export function shortcutTitleStem(title: string): string {
 export function shortcutArguments(argv: string[]): { gameId?: string; profile?: string } {
   const result: { gameId?: string; profile?: string } = {};
   for (let index = 0; index < argv.length; index++) {
-    const flag = argv[index];
+    const argument = argv[index];
+    const separator = argument.indexOf('=');
+    const flag = separator < 0 ? argument : argument.slice(0, separator);
     if (flag !== '--launch-game' && flag !== '--nexus-profile') continue;
-    const value = argv[++index];
+    const value = separator < 0 ? argv[++index] : argument.slice(separator + 1);
     if (flag === '--launch-game') {
       if (result.gameId || !value || !validId(value)) throw new Error('Invalid game shortcut ID.');
       result.gameId = value;
@@ -66,7 +69,24 @@ export function shortcutInstanceRequest(data: unknown, currentProfile: string): 
   return result;
 }
 
-interface Locations { userData: string; desktop: string; applications: string; launcher?: string; icon: string }
+interface Locations { userData: string; desktop: string; applications: string; launcher?: string; icon: string; steamLaunchClient?: string }
+async function steamLaunchClient(): Promise<string | undefined> {
+  for (const root of ['.steam/root', '.steam/steam', '.local/share/Steam']) {
+    const client = path.join(os.homedir(), root, 'steamrt64/pv-runtime/steam-runtime-steamrt/bin/steam-runtime-launch-client');
+    try { await fs.access(client, constants.X_OK); return client; } catch { /* Older/native Steam needs no bridge. */ }
+  }
+}
+export function shortcutHostBridge(client?: string): string {
+  if (!client) return '';
+  const forwarded = ['SteamAppId', 'SteamGameId', 'SteamOverlayGameId', 'STEAM_COMPAT_APP_ID', 'DISPLAY', 'XAUTHORITY',
+    'SDL_GAMECONTROLLERCONFIG', 'SDL_GAMECONTROLLER_IGNORE_DEVICES', 'SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT',
+    'SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD', 'SteamVirtualGamepadInfo', 'SteamVirtualGamepadInfo_Proton'];
+  return [
+    'if [ -n "${SteamGameId-}" ] && [ "${XODUS_NEXUS_HOST_LAUNCH-}" != 1 ]; then',
+    `  exec ${shellQuote(client)} --alongside-steam ${forwarded.map(name => '--pass-env=' + name).join(' ')} -- /usr/bin/env XODUS_NEXUS_HOST_LAUNCH=1 /bin/sh "$0" "$@"`,
+    'fi', '',
+  ].join('\n');
+}
 export async function shortcutLauncherPath(appImage:string,argv0?:string):Promise<string>{
   const resolved=await fs.realpath(appImage);
   // Prefer the canonical stable link, then the legacy one used by older installs.
@@ -120,8 +140,13 @@ export class GameShortcuts {
     const directory = path.join(this.locations.userData, 'shortcuts');
     await this.directory(directory);
     const entry = path.join(directory, 'launch-game');
+    // Run beside Steam, outside its per-game container (which lacks AppImage
+    // FUSE and host desktop services). The waiting client retains Steam Stop.
+    const bridge = shortcutHostBridge(this.locations.steamLaunchClient ?? await steamLaunchClient());
     // No tokens or runtime paths in shortcuts. Refresh after moving/updating the app.
-    const body = (game: boolean) => `#!/bin/sh\n# ${this.marker}\nunset APPIMAGE APPDIR ARGV0 OWD ELECTRON_RUN_AS_NODE VITE_DEV_SERVER_URL XODUS_DEMO XODUS_DEMO_TOUR XODUS_DEMO_CAPTURE_DIR XODUS_SMOKE_SCREENSHOT\nexec ${shellQuote(launcher)} --nexus-profile ${shellQuote(this.locations.userData)}${game ? ' --launch-game' : ''} "$@"\n`;
+    // Chromium moves bare switches ahead of positional arguments before main
+    // runs. Bind each value to its switch so cold starts and handoffs agree.
+    const body = (game: boolean) => `#!/bin/sh\n# ${this.marker}\n${bridge}unset APPIMAGE APPDIR ARGV0 OWD ELECTRON_RUN_AS_NODE VITE_DEV_SERVER_URL XODUS_DEMO XODUS_DEMO_TOUR XODUS_DEMO_CAPTURE_DIR XODUS_SMOKE_SCREENSHOT\n${game ? 'nexus_game_id=$1\nshift\n' : ''}exec ${shellQuote(launcher)} ${shellQuote('--nexus-profile=' + this.locations.userData)}${game ? ' --launch-game="$nexus_game_id"' : ''} "$@"\n`;
     await this.write(entry, body(true), 0o700, `# ${this.marker}`);
     const nexusEntry = path.join(directory, 'launch-nexus');
     await this.write(nexusEntry, body(false), 0o700, `# ${this.marker}`);

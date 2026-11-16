@@ -12,6 +12,26 @@ const execute = promisify(execFile);
 const id = '0123456789abcdef';
 const game = { id, title: 'A game\nExec=unwanted', installState: 'ready' as const };
 
+it('bridges Steam container launches once while preserving game arguments and controller context', async () => {
+  const f = await fixture();
+  try {
+    const client = path.join(f.root, "Steam client's bridge");
+    // Simulate Steam's outside-container service, including its explicit env marker.
+    await fs.writeFile(client, '#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n', { mode: 0o700 });
+    await new GameShortcuts({ ...f.locations, steamLaunchClient: client }).initialize();
+    const helper = path.join(f.locations.userData, 'shortcuts/launch-game');
+    const result = await execute('/bin/sh', [helper, id, 'argument with spaces'], {
+      env: { ...process.env, SteamGameId: '12529711154966036480', XODUS_NEXUS_HOST_LAUNCH: '' },
+    });
+    expect(result.stdout.trim()).toBe(`--nexus-profile=${f.locations.userData} --launch-game=${id} argument with spaces`);
+    const script = await fs.readFile(helper, 'utf8');
+    expect(script).toContain('--pass-env=SDL_GAMECONTROLLERCONFIG');
+    expect(script).not.toContain('--pass-env=LD_LIBRARY_PATH');
+    expect((await execute('/bin/sh', [helper, id], { env: { ...process.env, SteamGameId: '' } })).stdout.trim())
+      .toBe(`--nexus-profile=${f.locations.userData} --launch-game=${id}`);
+  } finally { await fs.rm(f.root, { recursive: true, force: true }); }
+});
+
 it('matches game windows to a hidden profile-specific entry and preserves it when creating a shortcut', async () => {
   const f = await fixture();
   try {
@@ -66,12 +86,12 @@ it('creates Steam launch descriptions without unwanted desktop/menu entries and 
     expect(steam.executable).toBe('"/bin/sh"');
     expect(steam.options).toContain('"' + id + '"');
     expect((await execute('/bin/sh', [path.join(f.locations.userData, 'shortcuts/launch-game'), id])).stdout.trim())
-      .toBe(`--nexus-profile ${f.locations.userData} --launch-game ${id}`);
+      .toBe(`--nexus-profile=${f.locations.userData} --launch-game=${id}`);
     const nexus = await f.shortcuts.steamLaunch();
     expect(nexus.title).toBe('Nexus Launcher');
     expect(nexus.identity).not.toBe(steam.identity);
     expect((await execute('/bin/sh', [path.join(f.locations.userData, 'shortcuts/launch-nexus')])).stdout.trim())
-      .toBe(`--nexus-profile ${f.locations.userData}`);
+      .toBe(`--nexus-profile=${f.locations.userData}`);
     await expect(fs.access(f.locations.desktop)).rejects.toThrow();
     await expect(fs.access(f.locations.applications)).rejects.toThrow();
     await expect(f.shortcuts.steamLaunch({ ...game, installState: 'imported' })).rejects.toThrow('ready');
@@ -101,7 +121,7 @@ it('creates profile-scoped desktop/menu entries and starts the launcher, not the
     expect((await fs.stat(menu)).mode & 0o777).toBe(0o644);
     const entry = path.join(f.locations.userData, 'shortcuts/launch-game');
     const result = await execute(entry, [id]);
-    expect(result.stdout.trim()).toBe(`--nexus-profile ${f.locations.userData} --launch-game ${id}`);
+    expect(result.stdout.trim()).toBe(`--nexus-profile=${f.locations.userData} --launch-game=${id}`);
     const before = await fs.readFile(target, 'utf8');
     // AppImage update replaces the file at the same path; shortcut stays valid.
     await fs.rename(f.locations.launcher, `${f.locations.launcher}.old`);
@@ -211,6 +231,11 @@ it('atomically creates colliding titles without overwriting either entry', async
 });
 
 it('parses only validated shortcut requests and escapes desktop Exec separately from shell quoting', () => {
+  expect(shortcutArguments(['launcher', `--launch-game=${id}`, '--ozone-platform=wayland', '--nexus-profile=/a profile=one']))
+    .toEqual({ profile: '/a profile=one', gameId: id });
+  for (const argv of [['--launch-game='], ['--launch-game=../game'], [`--launch-game=${id}`, '--launch-game', id],
+    ['--nexus-profile=relative'], ['--nexus-profile=/x\nExec=evil'], ['--nexus-profile=/one', '--nexus-profile=/two']])
+    expect(() => shortcutArguments(argv)).toThrow();
   expect(shortcutArguments(['launcher', '--nexus-profile', '/a profile', '--launch-game', id])).toEqual({ profile: '/a profile', gameId: id });
   expect(shortcutArguments(['launcher', '--unrelated'])).toEqual({});
   for (const argv of [['--launch-game'], ['--launch-game', '../game'], ['--launch-game', id, '--launch-game', id],
@@ -287,7 +312,7 @@ it('follows the stable launcher symlink after an update instead of pinning its r
     expect(await shortcutLauncherPath(f.locations.launcher)).toBe(stable);
     const shortcuts=new GameShortcuts({...f.locations,launcher:stable});await shortcuts.initialize();
     const helper=path.join(f.locations.userData,'shortcuts/launch-game');
-    expect((await execute('/bin/sh',[helper,id])).stdout).toContain('--launch-game '+id);
+    expect((await execute('/bin/sh',[helper,id])).stdout).toContain('--launch-game='+id);
     const updated=path.join(f.root,'updated');await fs.writeFile(updated,'#!/bin/sh\nprintf updated\n',{mode:0o700});
     await fs.unlink(stable);await fs.symlink(updated,stable);
     expect((await execute('/bin/sh',[helper,id])).stdout).toBe('updated');
@@ -304,7 +329,7 @@ it('prefers the canonical stable launcher link and still follows the legacy link
     expect(await shortcutLauncherPath(f.locations.launcher)).toBe(canonical);
     const shortcuts=new GameShortcuts({...f.locations,launcher:canonical});await shortcuts.initialize();
     const helper=path.join(f.locations.userData,'shortcuts/launch-game');
-    expect((await execute('/bin/sh',[helper,id])).stdout).toContain('--launch-game '+id);
+    expect((await execute('/bin/sh',[helper,id])).stdout).toContain('--launch-game='+id);
     const updated=path.join(f.root,'updated');await fs.writeFile(updated,'#!/bin/sh\nprintf updated\n',{mode:0o700});
     await fs.unlink(canonical);await fs.symlink(updated,canonical);
     expect(await shortcutLauncherPath(f.locations.launcher)).toBe(legacy);

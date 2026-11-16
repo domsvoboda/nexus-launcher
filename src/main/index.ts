@@ -9,6 +9,7 @@ import {resolveRuntimeFamily} from './runtime-families.js';
 import {desktopTrayAvailable} from './launcher-tray-desktop.js';
 import {LauncherTray} from './launcher-tray.js';
 import {SteamKeyboard} from './steam-keyboard.js';
+import {watchSteamGameWindow} from './steam-game-window.js';
 import type {XboxProfileGames,XboxProfileRequest} from '../shared/types.js';
 import {XboxSocial as NativeXboxSocial} from './xbox-native-social.js';
 import {resetSocialTransport} from './xbox-social-transport.js';
@@ -189,6 +190,14 @@ const gameProcesses = new Map<string, GameProcess>();
 const gameFinalizations = new Map<string, Promise<void>>();
 const steamLeases = new Set<SteamLaunchLease>();
 let steamLauncherSession: { environment: SteamLaunchEnvironment; lease: SteamLaunchLease } | undefined;
+let stopSteamLauncherWindow = () => {};
+function associateSteamLauncherWindow(): void {
+  stopSteamLauncherWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  stopSteamLauncherWindow = watchSteamGameWindow(process.pid, steamGameEnvironment(process.env, steamLauncherSession?.environment),
+    app.isPackaged ? path.join(process.resourcesPath, 'overlay', 'steam_game_window.py')
+      : path.join(__dirname, '..', '..', 'assets', 'overlay', 'steam_game_window.py'), console.warn, true);
+}
 interface SteamGameContext { environment: SteamLaunchEnvironment; signal: AbortSignal }
 interface LaunchRequest { gameId?: string; steam?: SteamHandoff }
 const cancelledDownloads = new Set<string>();
@@ -357,6 +366,7 @@ async function handleLaunchRequest({ gameId, steam }: LaunchRequest): Promise<vo
         if (steamLauncherSession && !steamLauncherSession.lease.signal.aborted) return;
         const session = { environment: steam.environment, lease };
         steamLauncherSession = session;
+        associateSteamLauncherWindow();
         const owned = lease;
         owned.signal.addEventListener('abort', () => {
           steamLeases.delete(owned);
@@ -1406,6 +1416,7 @@ async function prepareGameLaunch(id: string, steam?: SteamGameContext): Promise<
   let inviteBridge: GameInviteBridge | undefined;
   let launchWrapper: GameWrapper | undefined;
   let releaseDisplay = () => {};
+  let stopSteamWindow = () => {};
   const launchEnvironment = steamGameEnvironment(process.env, steam?.environment ?? steamLauncherSession?.environment);
   const steamSignal = steam?.signal ?? steamLauncherSession?.lease.signal;
   let removeSteamStop = () => {};
@@ -1530,6 +1541,9 @@ async function prepareGameLaunch(id: string, steam?: SteamGameContext): Promise<
     }, { stopPrefix: protonRunner?.stopPrefix });
     operations.set(operationId, tracked.child);
     gameProcesses.set(operationId, tracked);
+    stopSteamWindow = watchSteamGameWindow(tracked.child.pid, environment, app.isPackaged
+      ? path.join(process.resourcesPath, 'overlay', 'steam_game_window.py')
+      : path.join(__dirname, '..', '..', 'assets', 'overlay', 'steam_game_window.py'), addGameLog);
     gameGuide?.bind(id,game.title,tracked.child.pid);
     gameOperation.status = 'running';
     gameOperation.phase = 'Xodus is running; waiting for the game window…';
@@ -1574,6 +1588,7 @@ async function prepareGameLaunch(id: string, steam?: SteamGameContext): Promise<
       gameOperation.finishedAt = new Date().toISOString();
     }).finally(async () => {
       removeSteamStop();
+      stopSteamWindow();
       releaseDisplay();gameGuide?.unbind(id);
       finalizingGame = true;
       try {
@@ -1601,6 +1616,7 @@ async function prepareGameLaunch(id: string, steam?: SteamGameContext): Promise<
     void completion.catch(error => console.error('Game finalization failed:', error));
   } catch (error) {
     removeSteamStop();
+    stopSteamWindow();
     releaseDisplay();gameGuide?.unbind(id);
     await inviteBridge?.stop().catch(()=>{});gameInviteBridges.delete(operationId);
     await launchWrapper?.cleanup().catch(() => undefined);
@@ -2595,7 +2611,7 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.on('did-fail-load', (_event, code, description) => console.error('Renderer load failed', code, description));
   mainWindow.webContents.on('render-process-gone', (_event, details) => console.error('Renderer process exited', details.reason));
   if (smokeScreenshot) mainWindow.webContents.on('console-message', (_event, level, message) => console.error(`Renderer console [${level}]`, message));
-  if (!hiddenCapture) mainWindow.once('ready-to-show', () => mainWindow?.show());
+  if (!hiddenCapture) mainWindow.once('ready-to-show', () => { mainWindow?.show(); associateSteamLauncherWindow(); });
   if (!hiddenCapture) {
     if (windowState?.maximized || tooLarge) mainWindow.maximize();
     mainWindow.on('close', () => { if (mainWindow) saveWindowState(mainWindow); });
@@ -2605,7 +2621,7 @@ async function createWindow(): Promise<void> {
   mainWindow.on('closed',restoreOverlayShortcut);
   mainWindow.webContents.on('render-process-gone',restoreOverlayShortcut);
   mainWindow.on('close',event=>{if(mainWindow)launcherTray.close(event,()=>mainWindow?.hide());});
-  mainWindow.on('closed', () => { mainWindow = null; finishShortcutSession(); });
+  mainWindow.on('closed', () => { stopSteamLauncherWindow(); mainWindow = null; finishShortcutSession(); });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void openDesktopTarget(url, () => shell.openExternal(url))
       .catch(() => console.warn('Could not open the external browser.'));
@@ -2872,6 +2888,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  stopSteamLauncherWindow();
   gameDisplay.stop(); steamOffer?.close();
   for (const lease of steamLeases) lease.close();
 });

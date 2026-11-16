@@ -47,6 +47,16 @@ else process.exitCode = Number(process.env.NEXUS_TEST_EXIT || 0);
 }
 
 describe('packaged Linux launcher bootstrap', () => {
+  it.each(['gamescope', 'KDE'])('binds legacy shortcut values before Electron starts in %s', desktop => {
+    const { main, result } = launch({ XDG_CURRENT_DESKTOP: desktop }, [
+      '--nexus-profile', "/tmp/a profile='quoted'", '--launch-game', '0123456789abcdef',
+      '--unrelated', 'literal $value', '',
+    ]);
+    expect(result.status).toBe(0);
+    expect(main.args).toEqual(["--nexus-profile=/tmp/a profile='quoted'", '--launch-game=0123456789abcdef',
+      '--unrelated', 'literal $value', '']);
+  });
+
   it.each(['gamescope', 'Gamescope', 'steam:GaMeScOpE'])
   ('selects simple IME before Electron starts only in Game Mode: %s', desktop => {
     const { records, main, args, result } = launch({ XDG_CURRENT_DESKTOP: desktop,

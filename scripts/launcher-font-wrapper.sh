@@ -41,6 +41,24 @@ app_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 1
 binary="$app_root/xodus-nexus.bin"
 # Native helper modes must retain their normal behavior, including Crashpad.
 if [ "${ELECTRON_RUN_AS_NODE-}" = 1 ]; then exec "$binary" "$@"; fi
+# Upgrade arguments from existing shortcuts before Chromium can reorder bare
+# switches and detach their values. Keep unrelated arguments verbatim.
+nexus_arguments_left=$#
+while [ "$nexus_arguments_left" -gt 0 ]; do
+  nexus_argument=$1
+  shift
+  nexus_arguments_left=$((nexus_arguments_left - 1))
+  case "$nexus_argument" in
+    --nexus-profile|--launch-game)
+      if [ "$nexus_arguments_left" -gt 0 ]; then
+        nexus_argument="$nexus_argument=$1"
+        shift
+        nexus_arguments_left=$((nexus_arguments_left - 1))
+      fi ;;
+  esac
+  set -- "$@" "$nexus_argument"
+done
+unset nexus_arguments_left nexus_argument
 # Steam's GTK input module can deliver the same text twice to Electron. Scope
 # the fallback to the top-level Game Mode session, before native GTK starts.
 # The main process restores Steam's module for non-Electron child processes.
