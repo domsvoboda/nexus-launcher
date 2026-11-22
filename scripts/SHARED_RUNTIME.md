@@ -372,8 +372,9 @@ provider 116, completion lifetime 2,805, scheduling 16, file saves 21,
 WinRT JSON 9, token dispatch/lifetime 88, Store entitlements/licenses 181, installed
 content 274, PlayFab folder/session 153 and initialization 19 (5,004 total),
 plus 64 game-process replacement checks, 40 software-Vulkan compute checks,
-and HTTP/1.1 and HTTP/2 transport, certificate-chain and response-decompression
-checks. The JSON probe exercises real activation, parsing,
+and HTTP/1.1 and HTTP/2 transport, certificate-chain, response-decompression,
+HTTP/2 receive-window (at least 1 MiB for the stream and the connection) and
+multi-window large-download checks. The JSON probe exercises real activation, parsing,
 object access and nested array/object access without account data or network.
 The token-dispatch probe uses a synthetic delayed failure, not a real identity
 or token. ABI/transport tests are not a substitute for a game test: test the clean-build

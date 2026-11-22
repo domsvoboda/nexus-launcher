@@ -45,7 +45,7 @@
     },
     {
       "file": "assets/wine-winhttp-http2.patch",
-      "sha256": "9c123a95a43120a239669faa45358fe94828125f53aa34ff34b0ce9e60189b3e"
+      "sha256": "afc7f7a0163747a7066179f86adf96025cf2f90a10530a2f753b75b1ad3d30ab"
     },
     {
       "file": "assets/wine-winhttp-private-diagnostics-disabled.patch",

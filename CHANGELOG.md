@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix games such as Cities: Skylines II staying on a black screen at startup while Xbox cloud saves download. The runtime's HTTP/2 transport advertised a 64 KiB receive window, which held large save downloads to a few hundred KB/s on ordinary connections; it now uses a 4 MiB stream and connection window. Takes effect with the next runtime build.
 - Keep controller input on the Steam keyboard without navigating the launcher underneath it, and preserve search results when the keyboard is dismissed.
 - Start the account service with long launcher profile paths without exceeding the Unix socket path limit.
 - Update Electron to 45.3.0, including the mitigation for compromised eMudhra intermediate certificates.
