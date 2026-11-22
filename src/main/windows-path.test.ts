@@ -23,6 +23,33 @@ it('imports mixed-case Windows manifest paths without renaming files or changing
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
+it('continues through a case-insensitive directory when the exact-case tree does not contain the executable', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-case-collision-'));
+  try {
+    await fs.mkdir(path.join(root, 'bin/Gaming.Desktop.x64/crashreporter'), { recursive: true });
+    await fs.mkdir(path.join(root, 'bin/gaming.desktop.x64'), { recursive: true });
+    const manifest = 'bin\\Gaming.Desktop.x64\\witcher3.exe';
+    await fs.writeFile(path.join(root, 'MicrosoftGame.Config'), `<Game><ExecutableList><Executable Name="${manifest}" /></ExecutableList></Game>`);
+    await fs.writeFile(path.join(root, '.xodus-streaming.msixvc'), 'inspection fixture');
+    await fs.writeFile(path.join(root, 'bin/Gaming.Desktop.x64/crashreporter/CrashReporter.exe'), 'crash reporter');
+    await fs.writeFile(path.join(root, 'bin/gaming.desktop.x64/witcher3.exe'), 'MZ game');
+    expect(await resolvePackageFile(root, manifest)).toBe('bin/gaming.desktop.x64/witcher3.exe');
+    expect(await inspectGameDirectory(root)).toMatchObject({ installState: 'ready', executable: manifest });
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
+it('rejects a case-insensitive fallback when multiple package trees match', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-case-ambiguous-'));
+  try {
+    const manifest = 'bin\\GAming.Desktop.x64\\witcher3.exe';
+    await fs.mkdir(path.join(root, 'bin/Gaming.Desktop.x64'), { recursive: true });
+    await fs.mkdir(path.join(root, 'bin/gaming.desktop.x64'), { recursive: true });
+    await fs.writeFile(path.join(root, 'bin/Gaming.Desktop.x64/witcher3.exe'), 'first');
+    await fs.writeFile(path.join(root, 'bin/gaming.desktop.x64/witcher3.exe'), 'second');
+    expect(await resolvePackageFile(root, manifest)).toBeUndefined();
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
 it('prefers an exact name and refuses ambiguous fallbacks, traversal, directories and escaping symlinks', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-case-safe-'));
   const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-case-outside-'));
