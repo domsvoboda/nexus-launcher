@@ -1173,28 +1173,23 @@ index 0000000..5eff8ed
 +    }
 +}
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index a5c3e54..2809150 100644
+index dcbcfa6..34c7779 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
-@@ -64,6 +64,17 @@ enum SubCommand {
+@@ -61,6 +61,12 @@ enum SubCommand {
      Streaming {
          source: String,
          destination: String,
-+        #[arg(
-+            long,
-+            help = "Emit Nexus progress protocol v1 as newline-delimited JSON"
-+        )]
++        /// Emit Nexus progress protocol v1 as newline-delimited JSON
++        #[arg(long)]
 +        progress_json: bool,
-+        #[arg(
-+            long,
-+            requires = "progress_json",
-+            help = "Accept pause/resume JSON commands on stdin"
-+        )]
++        /// Accept pause/resume JSON commands on stdin
++        #[arg(long, requires = "progress_json")]
 +        control_stdin: bool,
-         #[arg(
-             long,
-             default_value_t = false,
-@@ -170,7 +181,9 @@ async fn main() -> ExitCode {
+         /// Attempt to skip downloading NTFS metadata to be faste while missing some files
+         #[arg(long, default_value_t = false)]
+         try_skip_ntfs: bool,
+@@ -158,7 +164,9 @@ async fn main() -> ExitCode {
      // these fully offline commands were unusable.
      let needs_device_credentials = !matches!(
          args.command,
@@ -1205,7 +1200,7 @@ index a5c3e54..2809150 100644
              | SubCommand::Logout { .. }
      );
      if needs_device_credentials {
-@@ -249,6 +262,8 @@ async fn main() -> ExitCode {
+@@ -237,6 +245,8 @@ async fn main() -> ExitCode {
          SubCommand::Streaming {
              source,
              destination,
@@ -1214,7 +1209,7 @@ index a5c3e54..2809150 100644
              try_skip_ntfs,
              market,
              parallel,
-@@ -261,6 +276,8 @@ async fn main() -> ExitCode {
+@@ -249,6 +259,8 @@ async fn main() -> ExitCode {
                  try_skip_ntfs,
                  parallel,
                  market,
@@ -1223,7 +1218,7 @@ index a5c3e54..2809150 100644
              )
              .await
          }
-@@ -272,7 +289,19 @@ async fn main() -> ExitCode {
+@@ -260,7 +272,19 @@ async fn main() -> ExitCode {
              materialize_exe,
              materialize_chain,
              market,

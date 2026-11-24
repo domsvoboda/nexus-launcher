@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Backend 0.2.10: update to the latest upstream Xodus source, with the Nexus patches rebased onto it, build with Rust 1.100.0 and update binrw to 0.15.2.
+- Sort My Library and Store search results by the Game Pass tier required to play each game, and show that tier on game cards.
 - Fix Jurassic World Evolution 3 aborting during app-constrained notification registration at startup.
 - Fix repeated Xbox task-queue termination requests leaving games waiting during world cleanup or shutdown.
 

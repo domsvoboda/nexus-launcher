@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AccountGames, Cover, GameLaunchToolFields, GameTitle, HomePage, LibraryPagination, Sidebar, type LibraryFilters } from './App';
+import { AccountGames, Cover, GameLaunchToolFields, GameTitle, HomePage, LibraryPagination, LibraryProductCard, Sidebar, libraryRows, type LibraryFilters } from './App';
 import { defaultLaunchTools } from '../shared/launch-tools';
 import { demoSnapshot } from '../shared/demo-data';
 
@@ -18,14 +18,15 @@ it('counts waiting installations in the queue shortcut while a game is running',
   expect(html).toContain('2 active installations');
 });
 it('restores the parent-owned filters after the library is recreated',()=>{
-  const filters: LibraryFilters = { kind: 'owned', playState: 'installed', query: 'Edition' };
+  const filters: LibraryFilters = { kind: 'owned', playState: 'installed', sort: 'pass-tier', query: 'Edition' };
   const data=demoSnapshot(); data.auth={running:false,stored:false,note:''};
   const library=()=>renderToStaticMarkup(<AccountGames data={data} toast={()=>{}} filters={filters} onFiltersChange={()=>{}} />);
   for(const html of [library(),library()]) {
-    expect(html).toContain('<option value="owned" selected="">');
-    expect(html).toContain('<option value="installed" selected="">');
+    expect(html).toMatch(/role="radio" aria-checked="true" class="active">Owned</);
+    expect(html).toMatch(/role="radio" aria-checked="true" class="active">Installed</);
+    expect(html).toContain('<option value="pass-tier" selected="">');
     expect(html).toContain('value="Edition"');
-    expect(html).not.toContain('<option value="all" selected="">');
+    expect(html).not.toMatch(/aria-checked="true" class="active">All (games|states)</);
   }
 });
 it('offers Access and Play state filters without cloud streaming, preserving installed games offline',()=>{
@@ -37,6 +38,30 @@ it('offers Access and Play state filters without cloud streaming, preserving ins
   expect(html).toContain(data.games[0].title);
   expect(html).not.toContain('Owned · Installed');
   expect(html).toContain(`title="${data.games[0].title}"`);
+});
+
+it('offers a Game Pass tier sort and names the lowest plan on Game Pass cards',()=>{
+  const html=renderToStaticMarkup(<AccountGames data={demoSnapshot()} toast={()=>{}} />);
+  expect(html).toContain('aria-label="Sort"');
+  expect(html).toContain('<option value="installed-first" selected="">Installed first</option>');
+  expect(html).toContain('<option value="pass-tier">Game Pass tier</option>');
+  const product={ productId:'9AAAAAAAAAAA', title:'Pass Game', description:'', categories:[], installability:'supported' as const, supportNote:'', access:'gamepass' as const };
+  const card=(value: typeof product & { gamePassTier?: 'premium' })=>renderToStaticMarkup(<LibraryProductCard product={value} present={false} downloading={false} canInstall install={()=>{}} />);
+  expect(card({ ...product, gamePassTier:'premium' })).toContain('<span>Game Pass Premium</span>');
+  expect(card(product)).toContain('<span>Game Pass</span>');
+});
+
+it('sorts library rows by owned, cheapest Game Pass tier, unverified Game Pass and local games',()=>{
+  const game=(id: string, title: string, storeId?: string)=>({ ...demoSnapshot().games[0], id, title, storeId });
+  const product=(productId: string, title: string, access: 'owned'|'gamepass', gamePassTier?: 'essential'|'premium'|'pc'|'ultimate', installProductId?: string)=>({ productId, installProductId, title, access, gamePassTier, description:'', categories:[], installability:'supported' as const, supportNote:'' });
+  const games=[game('local','Aardvark local'), game('owned','Owned installed','9OWNED000001'), game('bundle','Premium installed','9PACKAGE0001')];
+  const page={ accessByProductId:{ '9OWNED000001':'owned' as const, '9PACKAGE0001':'gamepass' as const, '9ULT00000001':'gamepass' as const, '9ESS00000001':'gamepass' as const, '9UNK00000001':'gamepass' as const },
+    products:[product('9BUNDLE00001','Premium installed','gamepass','premium','9PACKAGE0001'), product('9ULT00000001','Ultimate game','gamepass','ultimate'),
+      product('9UNK00000001','Unverified pass','gamepass'), product('9ESS00000001','Essential game','gamepass','essential')] };
+  const order=(sort: LibraryFilters['sort'])=>libraryRows(games, page, { kind:'all', playState:'all', sort, query:'' }).map(row=>row.title);
+  expect(order('installed-first')).toEqual(['Aardvark local','Owned installed','Premium installed','Ultimate game','Unverified pass','Essential game']);
+  expect(order('pass-tier')).toEqual(['Owned installed','Essential game','Premium installed','Ultimate game','Unverified pass','Aardvark local']);
+  expect(libraryRows(games, page, { kind:'all', playState:'installed', sort:'pass-tier', query:'' }).find(row=>row.id==='bundle')?.tier).toBe('premium');
 });
 
 it('preserves full edition names in native hover tooltips and escapes special characters',()=>{
@@ -93,7 +118,7 @@ it('shows account-wide search progress instead of asking to load more pages', ()
 it('keeps installed-only and offline searches local and immediately available', () => {
   const data = demoSnapshot(); data.auth = { running: false, stored: false, note: '' };
   const html = renderToStaticMarkup(<AccountGames data={data} toast={() => {}}
-    filters={{ kind: 'all', playState: 'installed', query: data.games[0].title }} />);
+    filters={{ kind: 'all', playState: 'installed', sort: 'installed-first', query: data.games[0].title }} />);
   expect(html).toContain(data.games[0].title);
   expect(html).not.toContain('Searching all library games');
   expect(html).not.toContain('No games match');

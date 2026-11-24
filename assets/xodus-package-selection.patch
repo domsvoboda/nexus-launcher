@@ -50,7 +50,7 @@ index 568bcac..978fafc 100644
                      let Err(err) = content_id_task else {
                          eprintln!("Unknown Error");
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index 445ee9c..208600c 100644
+index eb27a1a..2f8e1ab 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
 @@ -9,6 +9,7 @@ use xodus::tokens::TokenManager;
@@ -65,7 +65,7 @@ index 445ee9c..208600c 100644
  
  #[derive(Subcommand)]
  enum SubCommand {
-+    #[command(about = "Resolve public Store packages without sign-in or downloading")]
++    /// Resolve public Store packages without sign-in or downloading
 +    ResolvePackage {
 +        product: String,
 +        #[arg(long)]
@@ -73,19 +73,20 @@ index 445ee9c..208600c 100644
 +        #[arg(long, default_value = "US")]
 +        market: String,
 +    },
-     #[command(about = "Download msixvc or xsp files fo given game")]
+     /// Download msixvc or xsp files fo given game
      Download {
          product: String,
-@@ -80,6 +89,8 @@ enum SubCommand {
+@@ -77,6 +86,9 @@ enum SubCommand {
      Streaming {
          source: String,
          destination: String,
-+        #[arg(long, help = "Content ID explicitly selected from resolve-package for this Store product")]
++        /// Content ID explicitly selected from resolve-package for this Store product
++        #[arg(long)]
 +        selected_content_id: Option<String>,
-         #[arg(
-             long,
-             help = "Emit Nexus progress protocol v1 as newline-delimited JSON"
-@@ -165,7 +176,7 @@ struct CliArgs {
+         /// Emit Nexus progress protocol v1 as newline-delimited JSON
+         #[arg(long)]
+         progress_json: bool,
+@@ -148,7 +160,7 @@ struct CliArgs {
  async fn main() -> ExitCode {
      let filter = tracing_subscriber::EnvFilter::from_env("XODUS_LOG");
      let registry =
@@ -94,7 +95,7 @@ index 445ee9c..208600c 100644
  
      #[cfg(feature = "tokio_console")]
      {
-@@ -193,6 +204,13 @@ async fn main() -> ExitCode {
+@@ -176,6 +188,13 @@ async fn main() -> ExitCode {
          webview::enable_stdio();
      }
  
@@ -108,7 +109,7 @@ index 445ee9c..208600c 100644
      xodus::secrets::init_secrets().expect("Unable to initialize credentials");
      let tokens = TokenManager::with_keychain_and_memory();
  
-@@ -216,6 +234,7 @@ async fn main() -> ExitCode {
+@@ -199,6 +218,7 @@ async fn main() -> ExitCode {
      }
  
      let code = match args.command {
@@ -116,7 +117,7 @@ index 445ee9c..208600c 100644
          SubCommand::Download {
              product,
              market,
-@@ -289,6 +308,7 @@ async fn main() -> ExitCode {
+@@ -272,6 +292,7 @@ async fn main() -> ExitCode {
          SubCommand::Streaming {
              source,
              destination,
@@ -124,7 +125,7 @@ index 445ee9c..208600c 100644
              progress_json,
              control_stdin,
              try_skip_ntfs,
-@@ -305,6 +325,7 @@ async fn main() -> ExitCode {
+@@ -288,6 +309,7 @@ async fn main() -> ExitCode {
                  market,
                  progress_json,
                  control_stdin,

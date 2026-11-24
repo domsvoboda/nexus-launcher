@@ -8,7 +8,7 @@ import {
 import type { AccountLibraryPage, AppSnapshot, CatalogProduct, CatalogSearchResult, DiagnosticLog, Game, GameContentPlan, GameLaunchOptions, Page, Settings } from '../shared/types';
 import { estimateTimeRemaining } from '../shared/utils';
 import { nexusRuntimeUpdateAvailable, runtimeDisplay } from '../shared/runtime-display';
-import { subscriptionBadge } from '../shared/subscription';
+import { gamePassTierLabels, gamePassTierRank, subscriptionBadge } from '../shared/subscription';
 import { defaultLaunchTools, normalizeLaunchTools } from '../shared/launch-tools';
 import type { GameLaunchTools } from '../shared/types';
 import { PackageInstallProvider, usePackageInstall } from './PackageInstall';
@@ -157,8 +157,8 @@ function StatePill({ game }: { game: Game }) {
   </span>;
 }
 
-function SectionTitle({ title, action, onClick }: { title: string; action?: string; onClick?: () => void }) {
-  return <div className="section-title"><h2>{title}</h2>{action && onClick ? <button onClick={onClick}>{action}<ChevronRight /></button> : null}</div>;
+function SectionTitle({ title, action, onClick, children }: { title: string; action?: string; onClick?: () => void; children?: React.ReactNode }) {
+  return <div className="section-title"><h2>{title}</h2>{action && onClick ? <button onClick={onClick}>{action}<ChevronRight /></button> : null}{children}</div>;
 }
 
 function useGameLaunchOptions(game: Game | undefined, data: AppSnapshot): GameLaunchOptions | undefined {
@@ -219,6 +219,17 @@ export function HomePage({ data, go, action }: {
   </main>;
 }
 
+export type StoreSort = 'relevance' | 'pass-tier';
+
+/** Stable, so Microsoft Store relevance still orders games within each tier. */
+export function sortCatalogProducts(products: CatalogProduct[], sort: StoreSort): CatalogProduct[] {
+  // A Store pass name without a known PC tier still ranks ahead of retail-only games.
+  const rank = (product: CatalogProduct) => gamePassTierRank(product.includedWith ? 'gamepass' : undefined, product.gamePassTier);
+  return sort === 'pass-tier' ? [...products].sort((a, b) => rank(a) - rank(b)) : products;
+}
+
+const passName = (product: CatalogProduct) => product.gamePassTier ? gamePassTierLabels[product.gamePassTier] : product.includedWith;
+
 export function StoreProductCard({ product, selected, disabled, label, select, install }: {
   product: CatalogProduct; selected: boolean; disabled: boolean; label: string;
   select: (product: CatalogProduct) => void; install: (product: CatalogProduct) => void;
@@ -228,7 +239,7 @@ export function StoreProductCard({ product, selected, disabled, label, select, i
       onFocus={() => select(product)} onClick={() => select(product)}>
       {product.posterUrl ? <img src={product.posterUrl} alt={`${product.title} cover`} /> : <div className="catalog-cover-placeholder"><Gamepad2 /></div>}
       <span className={`catalog-support ${product.installability}`}>{product.installability === 'supported' ? 'PC' : product.installability === 'unknown' ? '?' : 'Unsupported'}</span>
-      <div><GameTitle title={product.title} /><small>{product.publisher ?? product.productId}</small><span>{product.purchasePrice ?? 'Price unavailable'}{product.includedWith ? ` · ${product.includedWith}` : ''}</span></div>
+      <div><GameTitle title={product.title} /><small>{product.publisher ?? product.productId}</small><span>{product.purchasePrice ?? 'Price unavailable'}{passName(product) ? ` · ${passName(product)}` : ''}</span></div>
     </button>
     <button className="catalog-card-install" data-gamepad-skip data-gamepad-card-action disabled={disabled} onClick={() => install(product)}>
       {label === 'Preparing…' ? <LoaderCircle className="spin" /> : label === 'Installed' ? <Check /> : <Download />}{label}
@@ -236,7 +247,9 @@ export function StoreProductCard({ product, selected, disabled, label, select, i
   </article>;
 }
 
-function StorePage({ data, toast, go, initialQuery }: { data: AppSnapshot; toast: (value: Toast) => void; go: (page: Page) => void; initialQuery: string }) {
+function StorePage({ data, toast, go, initialQuery, sort, onSortChange }: {
+  data: AppSnapshot; toast: (value: Toast) => void; go: (page: Page) => void; initialQuery: string; sort: StoreSort; onSortChange: (sort: StoreSort) => void;
+}) {
   const startPackageInstall = usePackageInstall();
   const [catalog, setCatalog] = useState<CatalogSearchResult>();
   const [featured, setFeatured] = useState<CatalogSearchResult>();
@@ -326,11 +339,11 @@ function StorePage({ data, toast, go, initialQuery }: { data: AppSnapshot; toast
     {!catalog ? <section className="featured-catalog"><SectionTitle title="Featured" />{featuredLoading ? <div className="catalog-loading"><LoaderCircle className="spin" /><span>Loading live Store collection…</span></div> : featured?.products.length ? <><div className="featured-rail">{featured.products.slice(0, 3).map((product) => <button className="featured-tile" key={product.productId} onClick={() => selectProduct(product)}>{product.heroUrl || product.posterUrl ? <img src={product.heroUrl ?? product.posterUrl} alt="" /> : <div className="featured-tile-placeholder"><Gamepad2 /></div>}<span className="featured-tile-copy"><GameTitle title={product.title} /><small>{product.publisher ?? 'Microsoft Store'} · {product.installability === 'supported' ? 'PC package verified' : 'Check package support'}</small></span></button>)}</div><SectionTitle title="Trending PC games" />{productGrid(featured.products.slice(3))}</> : <div className="catalog-empty"><Store /><h2>Featured games are temporarily unavailable</h2><p>{featuredError ?? 'Search still works with live Microsoft Store data.'}</p></div>}</section> : null}
 
     {selected ? <section className={`catalog-selection ${selected.heroUrl ? 'has-art' : ''}`} style={selected.heroUrl ? { '--catalog-hero': `url(${selected.heroUrl})` } as React.CSSProperties : undefined}>
-      <div className="catalog-selection-copy"><span className="overline">SELECTED PRODUCT</span><h2>{selected.title}</h2><div className="catalog-badges">{selected.purchasePrice ? <span>{selected.purchasePrice}</span> : null}{selected.includedWith ? <span className="pass">Available with {selected.includedWith}</span> : null}<span className={selected.installability}>{selected.installability === 'supported' ? 'PC MSIXVC verified' : selected.installability}</span></div><p>{selected.description}</p><small>{selected.publisher ?? 'Publisher unavailable'} · Store ID {selected.productId}{selected.installProductId ? ` · Package ID ${selected.installProductId}` : ''}</small></div>
+      <div className="catalog-selection-copy"><span className="overline">SELECTED PRODUCT</span><h2>{selected.title}</h2><div className="catalog-badges">{selected.purchasePrice ? <span>{selected.purchasePrice}</span> : null}{passName(selected) ? <span className="pass">Available with {passName(selected)}</span> : null}<span className={selected.installability}>{selected.installability === 'supported' ? 'PC MSIXVC verified' : selected.installability}</span></div><p>{selected.description}</p><small>{selected.publisher ?? 'Publisher unavailable'} · Store ID {selected.productId}{selected.installProductId ? ` · Package ID ${selected.installProductId}` : ''}</small></div>
       <div className="catalog-install-box"><p className={selected.installability === 'supported' ? 'supported' : 'unsupported'}>{selected.supportNote}</p><label>Install location<div className="input-action"><input value={destination} onChange={(event) => setDestination(event.target.value)} /><button type="button" onClick={chooseDestination} title="Choose folder"><FolderOpen /></button></div></label><div className="button-row"><button className="primary" disabled={selected.installability !== 'supported' || Boolean(busy) || !data.backend.capabilities.streaming || isInstalled(selected) || isQueued(selected)} onClick={() => install(selected, destination)}>{busy === selected.productId ? <LoaderCircle className="spin" /> : isInstalled(selected) ? <Check /> : <ArrowDownToLine />}{isInstalled(selected) ? 'Installed' : isQueued(selected) ? 'In Install Queue' : 'Install with Xodus'}</button>{selected.storeUrl ? <button className="secondary" onClick={() => window.open(selected.storeUrl, '_blank')}>Store page</button> : null}</div></div>
     </section> : null}
 
-    {catalog ? <><SectionTitle title={`Results for “${catalog.query}”`} />{productGrid(catalog.products)}{catalog.products.length === 0 ? <div className="empty-state compact"><div><Search /></div><h2>No games found</h2><p>Try a different title or a Microsoft Store Product ID.</p></div> : null}{catalog.hasMore ? <div className="load-more"><button className="secondary" disabled={loadingMore} onClick={loadMore}>{loadingMore ? <LoaderCircle className="spin" /> : <Plus />}Load more results</button></div> : null}</> : null}
+    {catalog ? <><SectionTitle title={`Results for “${catalog.query}”`}><label className="catalog-sort">Sort<select aria-label="Sort results" value={sort} onChange={event => onSortChange(event.target.value as StoreSort)}><option value="relevance">Relevance</option><option value="pass-tier">Game Pass tier</option></select></label></SectionTitle>{productGrid(sortCatalogProducts(catalog.products, sort))}{catalog.products.length === 0 ? <div className="empty-state compact"><div><Search /></div><h2>No games found</h2><p>Try a different title or a Microsoft Store Product ID.</p></div> : null}{catalog.hasMore ? <div className="load-more"><button className="secondary" disabled={loadingMore} onClick={loadMore}>{loadingMore ? <LoaderCircle className="spin" /> : <Plus />}Load more results</button></div> : null}</> : null}
 
     <SectionTitle title="Install by Product ID" />
     <form className="manual-install" onSubmit={manualInstall}><label>Product ID<input value={manualProductId} onChange={(event) => setManualProductId(event.target.value)} placeholder="For example: 9N4PT8HGCDHQ" required /></label><label>Queue name <em>Optional</em><input value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} /></label><label>Install location<div className="input-action"><input value={destination} onChange={(event) => setDestination(event.target.value)} required /><button type="button" onClick={chooseDestination}><FolderOpen /></button></div></label><button className="secondary" disabled={Boolean(busy) || !data.backend.capabilities.streaming}>{busy === 'manual' ? <LoaderCircle className="spin" /> : <Terminal />}Install unlisted ID</button></form>
@@ -389,19 +402,44 @@ export function LibraryProductCard({ product, present, downloading, installing, 
     if (!disabled && document.activeElement === card.current) card.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   }, [disabled]);
   return <article ref={card} className="catalog-card" data-gamepad-card tabIndex={disabled ? 0 : -1} aria-label={disabled ? `${product.title}, ${label}. Action unavailable` : undefined}>
-    <div className="catalog-card-main">{product.posterUrl ? <img src={product.posterUrl} alt={`${product.title} cover`} loading="lazy" /> : <div className="catalog-cover-placeholder"><Gamepad2 /></div>}<span className="catalog-support supported">PC</span><div><GameTitle title={product.title} /><small>{product.publisher ?? product.productId}</small><span>{product.access === 'owned' ? 'Owned' : 'Game Pass'}</span></div></div>
+    <div className="catalog-card-main">{product.posterUrl ? <img src={product.posterUrl} alt={`${product.title} cover`} loading="lazy" /> : <div className="catalog-cover-placeholder"><Gamepad2 /></div>}<span className="catalog-support supported">PC</span><div><GameTitle title={product.title} /><small>{product.publisher ?? product.productId}</small><span>{product.access === 'owned' ? 'Owned' : product.gamePassTier ? gamePassTierLabels[product.gamePassTier] : 'Game Pass'}</span></div></div>
     <button className="catalog-card-install" disabled={disabled} onClick={() => install(product)}>{present ? <Check /> : <Download />}{label}</button>
   </article>;
+}
+
+/** Installed games first unless sorting by tier. Installed games only know their tier once their library page has loaded. */
+/** Xbox-style pill row: one tap picks a filter, unlike a dropdown. */
+export function FilterPills<T extends string>({ label, value, options, change }: { label: string; value: T; options: [T, string][]; change: (value: T) => void }) {
+  return <div className="filter-pills" role="radiogroup" aria-label={label}>{options.map(([option, text]) =>
+    <button key={option} type="button" role="radio" aria-checked={value === option} className={value === option ? 'active' : undefined} onClick={() => change(option)}>{text}</button>)}</div>;
+}
+
+export function libraryRows(games: Game[], page: Pick<AccountLibraryPage, 'products' | 'accessByProductId'> | undefined, { kind, playState, sort, query }: LibraryFilters) {
+  const installed = new Set(games.flatMap(game => game.storeId?.toUpperCase() ?? []));
+  const products = (page?.products ?? []).filter(product => !installed.has(product.productId) && !installed.has(product.installProductId ?? ''));
+  const access = (game: Game) => game.storeId ? page?.accessByProductId[game.storeId.toUpperCase()] : undefined;
+  const passTier = (game: Game) => {
+    const id = game.storeId?.toUpperCase();
+    return id ? page?.products.find(product => product.productId === id || product.installProductId === id)?.gamePassTier : undefined;
+  };
+  const rows = [
+    ...games.filter(game => playState !== 'installable' && (kind === 'all' || access(game) === kind)).sort((a, b) => a.title.localeCompare(b.title))
+      .map(game => { const tier = passTier(game); return { id: game.id, title: game.title, game, product: undefined, tier, rank: gamePassTierRank(access(game), tier) }; }),
+    ...products.filter(() => playState !== 'installed').map(product => ({ id: product.productId, title: product.title, product, game: undefined, tier: product.gamePassTier, rank: gamePassTierRank(product.access, product.gamePassTier) })),
+  ].filter(row => row.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  if (sort === 'pass-tier') rows.sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title));
+  return rows;
 }
 
 export function AccountGames({ data, toast, selectedId, select, menu, filters, onFiltersChange }: AccountGamesProps) {
   const startPackageInstall = usePackageInstall();
   const [localFilters, setLocalFilters] = useState<LibraryFilters>(defaultLibraryFilters);
   const selectedFilters = filters ?? localFilters;
-  const { kind, playState, query } = selectedFilters;
+  const { kind, playState, sort, query } = selectedFilters;
   const updateFilters = (patch: Partial<LibraryFilters>) => (onFiltersChange ?? setLocalFilters)({ ...selectedFilters, ...patch });
   const setKind = (kind: LibraryFilters['kind']) => updateFilters({ kind });
   const setPlayState = (playState: LibraryFilters['playState']) => updateFilters({ playState });
+  const setSort = (sort: LibraryFilters['sort']) => updateFilters({ sort });
   const setQuery = (query: string) => updateFilters({ query });
   const [result, setResult] = useState<AccountLibraryPage>();
   const [busy, setBusy] = useState(false);
@@ -439,13 +477,8 @@ export function AccountGames({ data, toast, selectedId, select, menu, filters, o
   }, [identity, searching, busy, visible?.cursor, searchTerm, query]);
   const installed = new Set(data.games.flatMap(game => game.storeId?.toUpperCase() ?? []));
   const queued = new Set(data.downloads.filter(task => ['running', 'queued', 'paused'].includes(task.status)).map(task => task.productId.toUpperCase()));
-  const products = (visible?.products ?? []).filter(product => !installed.has(product.productId) && !installed.has(product.installProductId ?? ''));
   const access = (game: Game) => game.storeId ? visible?.accessByProductId[game.storeId.toUpperCase()] : undefined;
-  const rows = [
-    ...data.games.filter(game => playState !== 'installable' && (kind === 'all' || access(game) === kind)).sort((a, b) => a.title.localeCompare(b.title))
-      .map(game => ({ id: game.id, title: game.title, game, product: undefined })),
-    ...products.filter(() => playState !== 'installed').map(product => ({ id: product.productId, title: product.title, product, game: undefined })),
-  ].filter(row => row.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const rows = libraryRows(data.games, visible, selectedFilters);
   async function load(refresh = false) {
     setBusy(true); setError(undefined);
     try {
@@ -470,8 +503,9 @@ export function AccountGames({ data, toast, selectedId, select, menu, filters, o
   }
   return <section className="account-games">
     <div className="library-filters" data-gamepad-filters>
-      <label>Access<select aria-label="Access" value={kind} onChange={event => setKind(event.target.value as AccountLibraryPage['kind'])}><option value="all">All games</option><option value="owned">Owned</option><option value="gamepass">In Game Pass</option></select></label>
-      <label>Play state<select aria-label="Play state" value={playState} onChange={event => setPlayState(event.target.value as typeof playState)}><option value="all">All states</option><option value="installed">Installed</option><option value="installable">Ready to install</option></select></label>
+      <FilterPills label="Access" value={kind} change={setKind} options={[['all', 'All games'], ['owned', 'Owned'], ['gamepass', 'In Game Pass']]} />
+      <FilterPills label="Play state" value={playState} change={setPlayState} options={[['all', 'All states'], ['installed', 'Installed'], ['installable', 'Ready to install']]} />
+      <label>Sort<select aria-label="Sort" value={sort} onChange={event => setSort(event.target.value as typeof sort)}><option value="installed-first">Installed first</option><option value="pass-tier">Game Pass tier</option></select></label>
       <label className="library-filter-search">Search<input aria-label="Search library" placeholder="Search your games" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <button className="secondary library-refresh" aria-label="Refresh library" title="Refresh library" disabled={!available || busy} onClick={() => load(true)}>{busy ? <LoaderCircle className="spin" /> : <RefreshCw />}</button>
     </div>
@@ -484,7 +518,7 @@ export function AccountGames({ data, toast, selectedId, select, menu, filters, o
           const game = row.game;
           const license = access(game);
           return <div className={`library-card-wrap catalog-card ${selectedId === game.id ? 'selected' : ''}`} data-gamepad-card key={game.id} onContextMenu={event => { event.preventDefault(); menu?.(game, event.clientX, event.clientY); }}>
-            <button className="library-card catalog-card-main" data-gamepad-auto-select="focus" data-gamepad-detail-target={game.id} onFocus={() => select?.(game, false)} onClick={() => select?.(game, true)} onKeyDown={event => { if (event.key === 'F10' && event.shiftKey) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); menu?.(game, rect.left + 16, rect.top + 16); } }}><Cover game={game} /><div><GameTitle title={game.title} /><small>{game.publisher ?? 'Local installation'}</small><span>{license === 'owned' ? 'Owned' : license === 'gamepass' ? 'Game Pass' : 'Local installation'}</span></div></button>
+            <button className="library-card catalog-card-main" data-gamepad-auto-select="focus" data-gamepad-detail-target={game.id} onFocus={() => select?.(game, false)} onClick={() => select?.(game, true)} onKeyDown={event => { if (event.key === 'F10' && event.shiftKey) { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); menu?.(game, rect.left + 16, rect.top + 16); } }}><Cover game={game} /><div><GameTitle title={game.title} /><small>{game.publisher ?? 'Local installation'}</small><span>{license === 'owned' ? 'Owned' : license === 'gamepass' ? row.tier ? gamePassTierLabels[row.tier] : 'Game Pass' : 'Local installation'}</span></div></button>
             <span className="catalog-card-status" title={game.installMessage}>{game.installState === 'incomplete' ? <><CircleAlert />Incomplete</> : game.installState === 'imported' ? <><FolderOpen />Imported</> : <><Check />{data.gameUpdates?.[game.id]?.available ? 'Update available' : 'Installed'}</>}</span>
             <button className="library-card-menu-button" data-game-menu-trigger data-gamepad-skip aria-label={`Options for ${game.title}`} aria-haspopup="menu" title={`Options for ${game.title}`} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); menu?.(game, rect.right, rect.bottom); }}><MoreHorizontal /></button>
           </div>;
@@ -916,7 +950,7 @@ export function SettingsPage({ data, toast }: { data: AppSnapshot; toast: (value
         <section><h3>Game logging</h3><div className="toggle-row"><label className="toggle"><input type="checkbox" checked={form.verboseLogs} onChange={(event) => setForm({ ...form, verboseLogs: event.target.checked })} /><span>Verbose game logs</span></label><p>Writes full Wine, vkd3d-proton and Xodus diagnostics to the per-game log file and stops coalescing repeated lines. Slower and much larger logs; use temporarily when diagnosing a crash.</p></div><div className="button-row"><button className="secondary" disabled={Boolean(busy)} onClick={() => invoke('save-diagnostics', () => window.launcher.updateSettings({ verboseLogs: form.verboseLogs }), 'Logging settings saved.')}>Save diagnostics</button></div></section>
         <section><h3>Backend details</h3><p className="diagnostic-path mono">{data.backend.binaryPath ?? 'No backend selected'}</p><div className="meta-grid"><div><span>SOURCE</span><strong>{data.backend.source === 'external' ? 'External installation · read-only' : data.backend.delivery === 'release' ? 'Nexus GitHub Release' : data.backend.source === 'managed' ? 'Local versioned build' : '—'}</strong></div><div><span>COMMIT</span><strong className="mono">{data.backend.commit?.slice(0, 12) ?? '—'}</strong></div></div><div className="button-row"><button className="secondary" disabled={Boolean(busy) || data.backend.updating || data.backend.checking} onClick={() => invoke('backend-rebuild', () => window.launcher.rebuildBackend(), 'Pinned backend source was built and activated.')}><Github />Build backend from source</button></div>{data.backend.updating || logs.length > 0 ? <pre className="build-log">{logs.join('\n') || 'Waiting for backend output…'}</pre> : null}</section>
         <section><h3>Runtime details</h3><p className="diagnostic-path mono">{data.runtime.winePath ?? 'No runtime selected'}</p><div className="meta-grid"><div><span>SOURCE</span><strong>{runtimeInfo.source}</strong></div><div><span>BUILD</span><strong className="mono">{data.runtime.commit ?? '—'}</strong></div></div></section>
-        <section><h3>Build dependencies</h3><div className="dependency-grid"><ToggleStatus ok={data.backend.prerequisites.git} label="Git" /><ToggleStatus ok={data.backend.prerequisites.cargo} label="Cargo" /><ToggleStatus ok={data.backend.prerequisites.rustc} label="Rust 1.99" /><ToggleStatus ok={data.backend.prerequisites.protoc} label="protoc" /></div><p className="fine-print">Building Xodus also requires a C/C++ toolchain, CMake, OpenSSL 3 and D-Bus development packages.</p></section>
+        <section><h3>Build dependencies</h3><div className="dependency-grid"><ToggleStatus ok={data.backend.prerequisites.git} label="Git" /><ToggleStatus ok={data.backend.prerequisites.cargo} label="Cargo" /><ToggleStatus ok={data.backend.prerequisites.rustc} label="Rust 1.100" /><ToggleStatus ok={data.backend.prerequisites.protoc} label="protoc" /></div><p className="fine-print">Building Xodus also requires a C/C++ toolchain, CMake, OpenSSL 3 and D-Bus development packages.</p></section>
       </div>
     </details>
   </main>;
@@ -966,7 +1000,7 @@ export function FirstRunWizard({ data, toast }: { data: AppSnapshot; toast: (val
         <CircleAlert aria-hidden="true" />
         <div><h2 id="wizard-disclaimer-title">Independent, unofficial project</h2>
           <p>Xodus Nexus is built on Xodus, but it is <strong>not an official Xodus project</strong> and is not developed or maintained by the upstream Xodus developers.</p>
-          <p>Please report Nexus issues only in the <a href="https://github.com/domsvoboda/xodus-nexus/issues" target="_blank" rel="noopener noreferrer">Nexus repository</a>, not upstream. A problem in Nexus may not exist in upstream Xodus.</p>
+          <p>Please report Nexus issues only in the <a href="https://github.com/BounciestSky152/xodus-nexus-kay/issues" target="_blank" rel="noopener noreferrer">Nexus repository</a>, not upstream. A problem in Nexus may not exist in upstream Xodus.</p>
         </div>
       </section>
       <p>Choose where games install. Everything else can be changed later in Settings.</p>
@@ -1015,6 +1049,7 @@ export default function App() {
   const [toast, setToast] = useState<Toast>();
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
+  const [storeSort, setStoreSort] = useState<StoreSort>('relevance');
   // App stays mounted while pages change, unlike LibraryPage/AccountGames.
   const [libraryFilters, setLibraryFilters] = useState<LibraryFilters>(() => loadLibraryFilters());
   const [librarySelection, setLibrarySelection] = useState<{ id: string }>();
@@ -1043,7 +1078,7 @@ export default function App() {
     if (!data.games.some(game => game.id === id)) return;
     setLibrarySelection({ id });
     setSearch('');
-    changeLibraryFilters({ ...defaultLibraryFilters, playState: 'installed' });
+    changeLibraryFilters({ ...defaultLibraryFilters, playState: 'installed', sort: libraryFilters.sort });
     setPage('library');
   }
 
@@ -1056,7 +1091,7 @@ export default function App() {
 
     <section className="content-shell">
       <header className="topbar"><GlobalSearch games={data.games} page={page} query={search} change={setSearch} submit={value => { setSubmittedSearch(value); setPage('store'); }} select={openLibraryGame} /><TopStatus data={data} go={setPage} /></header>
-      <div className="page-scroll">{page === 'home' ? <HomePage data={data} go={setPage} action={action} /> : null}{page === 'store' ? <StorePage data={data} toast={setToast} go={setPage} initialQuery={submittedSearch} /> : null}{page === 'library' ? <LibraryPage data={data} toast={setToast} filters={libraryFilters} onFiltersChange={changeLibraryFilters} selection={librarySelection} /> : null}{page === 'downloads' ? <DownloadsPage data={data} toast={setToast} /> : null}{page === 'settings' ? <SettingsPage data={data} toast={setToast} /> : null}</div>
+      <div className="page-scroll">{page === 'home' ? <HomePage data={data} go={setPage} action={action} /> : null}{page === 'store' ? <StorePage data={data} toast={setToast} go={setPage} initialQuery={submittedSearch} sort={storeSort} onSortChange={setStoreSort} /> : null}{page === 'library' ? <LibraryPage data={data} toast={setToast} filters={libraryFilters} onFiltersChange={changeLibraryFilters} selection={librarySelection} /> : null}{page === 'downloads' ? <DownloadsPage data={data} toast={setToast} /> : null}{page === 'settings' ? <SettingsPage data={data} toast={setToast} /> : null}</div>
     </section>
     {toast ? <div className={`toast ${toast.kind}`}>{toast.kind === 'success' ? <Check /> : toast.kind === 'error' ? <CircleAlert /> : <Terminal />}<span>{toast.message}</span><button onClick={() => setToast(undefined)}><X /></button></div> : null}
   </div><GamepadNavigation back={() => setPage('home')} page={delta => setPage(current => {

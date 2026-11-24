@@ -318,19 +318,20 @@ index dd9f906..bee45be 100644
      let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
      if value["schema"] != 1 {
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index 1ae4167..a7cb729 100644
+index 2c3183c..cad4fe6 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
-@@ -114,6 +114,8 @@ enum SubCommand {
-             help = "Accept pause/resume JSON commands on stdin"
-         )]
+@@ -107,6 +107,9 @@ enum SubCommand {
+         /// Accept pause/resume JSON commands on stdin
+         #[arg(long, requires = "progress_json")]
          control_stdin: bool,
-+        #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=1_048_576), help = "Aggregate download bandwidth in KiB/s, 0 for unlimited; accepts live set-download-limit stdin control")]
++        /// Aggregate download bandwidth in KiB/s, 0 for unlimited; accepts live set-download-limit stdin control
++        #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=1_048_576))]
 +        download_limit_kib: u32,
-         #[arg(
-             long,
-             default_value_t = false,
-@@ -333,10 +335,12 @@ async fn main() -> ExitCode {
+         /// Attempt to skip downloading NTFS metadata to be faste while missing some files
+         #[arg(long, default_value_t = false)]
+         try_skip_ntfs: bool,
+@@ -317,10 +320,12 @@ async fn main() -> ExitCode {
              selected_content_id,
              progress_json,
              control_stdin,

@@ -337,10 +337,10 @@ index 0000000..5af348e
 +    }
 +}
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index e7603bd..ff5417f 100644
+index dbb4297..00c8057 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
-@@ -60,6 +60,13 @@ enum SubCommand {
+@@ -56,6 +56,13 @@ enum SubCommand {
          #[arg(long, default_value_t = false)]
          json: bool,
      },
@@ -353,8 +353,8 @@ index e7603bd..ff5417f 100644
 +    },
      Login,
      Logout {
-         #[arg(long, default_value_t = false, help = "Remove device license")]
-@@ -188,6 +195,7 @@ async fn main() -> ExitCode {
+         /// Remove device license
+@@ -171,6 +178,7 @@ async fn main() -> ExitCode {
          args.command,
          SubCommand::Account { .. }
              | SubCommand::Profile { .. }
@@ -362,7 +362,7 @@ index e7603bd..ff5417f 100644
              | SubCommand::Clep { .. }
              | SubCommand::SpLicense { .. }
              | SubCommand::Logout { .. }
-@@ -216,6 +224,7 @@ async fn main() -> ExitCode {
+@@ -199,6 +207,7 @@ async fn main() -> ExitCode {
              )
              .await
          }

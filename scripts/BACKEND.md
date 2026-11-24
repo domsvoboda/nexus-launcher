@@ -190,3 +190,11 @@ only. It activates that existing user service if the standard Secret Service
 name has neither an owner nor an activation provider. Existing/default providers
 are left alone. No packages, keyring configuration or plaintext fallback are
 introduced, and keyring failures remain errors.
+
+## Vendored eappx
+
+`xodus-eappx-binrw.patch` vendors `eappx` from tuxuser/eappx-rs at
+`e39222821f8004c663f61a917304e8f5f679b224` (MIT) into `third_party/eappx` and
+redirects the Git dependency there. The only source change raises `binrw` from
+0.13 to 0.15, whose older release contains code future Rust compilers reject.
+Remove the patch once upstream eappx depends on a current `binrw`.

@@ -13,8 +13,8 @@ function image(marker: number): Buffer {
 function release(version = '0.2.3') {
   const name = `Xodus-Nexus-${version}-x86_64.AppImage`;
   return { tag_name: `v${version}`, assets: [
-    { name, size: 100, browser_download_url: `https://github.com/domsvoboda/xodus-nexus/releases/download/v${version}/${name}` },
-    { name: `${name}.sha512sum`, size: 200, browser_download_url: `https://github.com/domsvoboda/xodus-nexus/releases/download/v${version}/${name}.sha512sum` },
+    { name, size: 100, browser_download_url: `https://github.com/BounciestSky152/xodus-nexus-kay/releases/download/v${version}/${name}` },
+    { name: `${name}.sha512sum`, size: 200, browser_download_url: `https://github.com/BounciestSky152/xodus-nexus-kay/releases/download/v${version}/${name}.sha512sum` },
   ] };
 }
 async function fixture(bad = '') {

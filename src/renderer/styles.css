@@ -231,10 +231,11 @@ button.primary svg, button.secondary svg { width: 17px; height: 17px; }
 .account-games-results { min-width: 0; grid-column: 1; }
 .library-filters { grid-column: 1 / -1; display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
 .library-filters label { display: grid; gap: 5px; color: #b8bec6; font-size: 11px; }
-.library-filters select, .library-filters input { height: 36px; background: #292e35; color: #f1f3f5; border: 1px solid #4b515b; border-radius: 6px; padding: 7px 10px; }
+.library-filters select, .library-filters input, .catalog-sort select { height: 36px; background: #292e35; color: #f1f3f5; border: 1px solid #4b515b; border-radius: 6px; padding: 7px 10px; }
 .library-filters .library-refresh { flex: 0 0 36px; width: 36px; min-height: 36px; height: 36px; padding: 0; display: grid; place-items: center; }
 .library-refresh svg { width: 17px; height: 17px; }
 .library-filter-search { flex: 1; min-width: 150px; }
+.catalog-sort { display: flex; align-items: center; gap: 8px; color: #b8bec6; font-size: 11px; }
 .library-filter-search input { width: 100%; }
 .library-license { display: block; margin: 8px 10px 0; color: #b8bec6; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .account-library-note { color: #9da2a8; font-size: 11px; line-height: 1.5; margin-top: 20px; }
@@ -633,3 +634,35 @@ button.primary, button.secondary { border-radius: 5px; min-height: 40px; font-si
 .keyring-compact .keyring-problem { margin: 10px 0 0; font-size: 12px; line-height: 1.5; }
 .keyring-help { margin-top: 8px; font-size: 11px; color: var(--muted); }
 .keyring-help > summary { cursor: pointer; width: fit-content; }
+
+/* Xbox-style filter pills. */
+.filter-pills { display: flex; flex-wrap: wrap; gap: 6px; padding: 3px; border-radius: 22px; background: rgba(255,255,255,.04); }
+.filter-pills button { height: 32px; padding: 0 15px; border: 0; border-radius: 16px; background: transparent; color: #c8ccd1; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .16s ease, color .16s ease, transform .12s ease; }
+.filter-pills button:hover { background: #343941; color: #fff; }
+.filter-pills button.active { background: #eef0f2; color: #15181c; }
+.filter-pills button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.filter-pills button:active { transform: scale(.96); }
+
+/* Motion: responsive, quick feedback so the interface feels alive. */
+.page { animation: page-in .28s cubic-bezier(.2,.7,.2,1); }
+@keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.catalog-card { border-radius: 6px; transition: transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .18s ease, border-color .18s ease; }
+.catalog-card:hover, .catalog-card:focus-within { transform: translateY(-4px) scale(1.015); border-color: rgba(255,255,255,.55); box-shadow: 0 10px 26px rgba(0,0,0,.45), 0 0 0 1px rgba(101,169,69,.35), 0 0 22px rgba(101,169,69,.22); z-index: 1; }
+.catalog-card img, .catalog-card .game-cover { transition: filter .2s ease, transform .3s ease; }
+.catalog-card:hover img, .catalog-card:focus-within img { filter: brightness(1.08) saturate(1.08); }
+.nav-item { transition: background .16s ease, transform .12s ease; }
+.nav-item svg { transition: color .16s ease, transform .16s ease; }
+.nav-item:hover svg, .nav-item.active svg { color: #fff; transform: scale(1.08); }
+.nav-item.active::before { background: var(--green); box-shadow: 0 0 10px var(--green); animation: nav-indicator .22s ease-out; }
+@keyframes nav-indicator { from { transform: scaleY(.2); opacity: 0; } to { transform: none; opacity: 1; } }
+button.primary, button.secondary, .quick-grid > button, .featured-tile { transition: background .16s ease, border-color .16s ease, transform .12s ease, box-shadow .16s ease; }
+button.primary:hover:not(:disabled) { box-shadow: 0 0 16px rgba(101,169,69,.45); }
+button.primary:active:not(:disabled), button.secondary:active:not(:disabled), .quick-grid > button:active { transform: scale(.97); }
+.featured-tile:hover, .featured-tile:focus-visible { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,.45); }
+.status-dot:not(.amber):not(.red) { animation: status-pulse 2.4s ease-in-out infinite; }
+@keyframes status-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(101,169,69,.55); } 50% { box-shadow: 0 0 0 5px rgba(101,169,69,0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .catalog-card:hover, .catalog-card:focus-within, .featured-tile:hover { transform: none; }
+}

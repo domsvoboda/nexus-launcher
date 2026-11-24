@@ -3,6 +3,7 @@ import { constants, createWriteStream, promises as fs, readFileSync, writeFileSy
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { resolutionZoom } from './window-zoom.js';
 import { randomUUID } from 'node:crypto';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AppSnapshot, AuthStatus, DownloadTask, Game, GameLaunchOptions, GameOperation, GameUpdate, InstallRequest, Settings } from '../shared/types.js';
@@ -1563,6 +1564,13 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.on('render-process-gone', (_event, details) => console.error('Renderer process exited', details.reason));
   if (smokeScreenshot) mainWindow.webContents.on('console-message', (_event, level, message) => console.error(`Renderer console [${level}]`, message));
   if (!hiddenCapture) mainWindow.once('ready-to-show', () => mainWindow?.show());
+  if (!hiddenCapture) {
+    const window = mainWindow;
+    const zoom = () => { const { width, height } = window.getContentBounds(); window.webContents.setZoomFactor(resolutionZoom(width, height)); };
+    window.on('resize', zoom); window.on('maximize', zoom); window.on('unmaximize', zoom);
+    window.on('enter-full-screen', zoom); window.on('leave-full-screen', zoom);
+    window.webContents.on('did-finish-load', zoom);
+  }
   if (!hiddenCapture) {
     if (windowState?.maximized) mainWindow.maximize();
     mainWindow.on('close', () => { if (mainWindow) saveWindowState(mainWindow); });

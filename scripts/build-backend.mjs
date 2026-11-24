@@ -52,6 +52,8 @@ command('cargo', ['test', '--locked', ...offline, ...features, '-p', 'msixvc', '
 // Aggregate HTTP probes mutate the process-wide limiter, so run them serially.
 command('cargo', ['test', '--locked', ...offline, ...features, '-p', 'msixvc', 'streaming_bandwidth_', '--', '--ignored', '--test-threads=1']);
 command('cargo', ['test', '--locked', ...offline, ...features, '-p', 'msixvc', 'package_metadata']);
+// Vendored outside the workspace, so it takes no workspace features.
+command('cargo', ['test', '--locked', ...offline, '-p', 'eappx']);
 command('cargo', ['build', '--release', '--locked', ...offline, ...features, '-p', 'xodus-cli', '-p', 'xodus-service']);
 const cli = path.join(target, 'release/xodus-cli');
 const help = command(cli, ['--help'], true);
